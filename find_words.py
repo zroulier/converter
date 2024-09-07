@@ -7,6 +7,7 @@ from datetime import datetime
 import pytz
 
 RUN_TIME = int(input('Choose number of batches for this session\n(100 searches per batch)\nBatch size:')) # of batches until program stops
+SYSTEM = input('What system are you on, | PC | or | Laptop |: ')
 timezone = pytz.timezone('America/New_York')
 
 # Your DictionaryAPI key
@@ -176,7 +177,7 @@ def get_word_info(word):
                         
                         # Only print if part of speech is in ACCEPTED_POS
                         if part_of_speech in ACCEPTED_POS:
-                            print(f"Found: {word} (Label: {part_of_speech})")
+                            print(f"Found: {word} (Label: {part_of_speech}) --> {total_searches}% complete")
                         return {
                             'word': word,
                             'part_of_speech': part_of_speech  # Extract part of speech
@@ -247,16 +248,6 @@ def update_log():
 
     # Write the updated total summary at the top of the file
     with open('log.txt', 'w') as f:
-        # f.write("###############################################\n")
-        # f.write("               Total Summary\n")
-        # f.write(f"Total searches: {total_searches_all}\n")
-        # f.write(f"Total words recognized: {total_words_recognized_all}\n")
-        # f.write(f"Total words saved: {total_words_saved_all}\n")
-        # f.write(f"Total duplicates found: {total_duplicates_all}\n")
-        # f.write(f"Total batches: {total_batches_all}\n")
-        # f.write("###############################################\n\n")
-        
-        # Append the session summary at the end of the log file
         f.write("\n###############################################\n")
         load_session_count()
         f.write(f"             SESSION {total_session_count} SUMMARY\n")
@@ -290,10 +281,10 @@ def print_total_summary():
         total_word_stats = (sum(1 for line in f) - 2) / 4
 
     print("###############################################")
-    print(f"               END OF SESSION {total_session_count - 1}")
+    print(f"               END OF SESSION {total_session_count - 2}")
     print("                TOTAL SUMMARY")
     total_api_calls += total_words_recognized
-    print(f'Total API usage: {total_api_calls} ({12561 + total_api_calls} total api count)')
+    print(f'Total API usage: {total_api_calls} ({32509 + total_api_calls} total api count)')
     print(f'Total words saved: {round(total_word_stats, 0)}')
         # Calculate and print the total time elapsed
     current_run_time = time.time() - start_time
@@ -308,10 +299,9 @@ def print_total_summary():
 # Update signal_handler function to include update_log call
 def signal_handler(signal, frame):
     global start_time, total_words_processed, total_elapsed_time, total_session_count
-    print("\n")
-    print("\n")
+    print("\n" * 2)
     print("###############################################")
-    print(f"             SESSION {total_session_count - 1} SUMMARY")
+    print(f"             SESSION {total_session_count - 2} SUMMARY")
     x = datetime.now(timezone)
     print(f'Session start:    {session_start_time.strftime("%A")}, {session_start_time.strftime("%B")} {session_start_time.strftime("%d")} {session_start_time.strftime("%X")}')
     print(f'Session end:      {x.strftime("%A")}, {x.strftime("%B")} {x.strftime("%d")} {x.strftime("%X")}')
@@ -361,28 +351,17 @@ def print_progress(i, total_words_processed, batch_size):
     save_elapsed_time()
     save_api_use()
 
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print('\n')
-    print("\n")
-    print("\n")
+    print("\n" * 25)
     print("###############################################")
     print(f'SAVED BATCH {int(total_searches / 100)}. PROGRESS: {total_words_processed}/{TOTAL_WORDS} ({progress_percentage:.4f}%)')
+    print(f'SESSIONS REMAINING: {RUN_TIME - int(total_searches / 100)}')
     print(f'ESTIMATED TIME REMAINING: {int(days)}D {int(hours)}H {int(minutes)}M {int(seconds)}S')
     print(f"WORDS SAVED THIS BATCH: {words_saved_in_batch}")
     print(f'EFFICIENCY RATE OF API: {round(words_saved_in_batch/words_recognized_in_batch * 100, 2)}%')
     print(f'BATCH UTILIZATION RATE: {words_recognized_in_batch}%')
     print("###############################################")
     print("*The next batch will begin in 5 seconds")
-    print("\n")
-    print("\n")
-    print("\n")
+    print("\n" * 3)
 
 def log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch):
     global total_session_count
@@ -410,6 +389,7 @@ def log_progress_to_file(i, total_words_processed, batch_size, start_time, total
         f'Session {total_session_count} Batch {int(batch_counter)}\n'
         "###############################################\n" + 
         f'{formatted_endtime[:19]}\n' +
+        f'System: {SYSTEM}\n' +
         f'Progress: {total_words_processed}/{TOTAL_WORDS} | {progress_percentage:.5f}%\n' +
         f'Estimated Time Remaining: {int(days)} days, {int(hours)}:{int(minutes)}:{int(seconds)}\n' +
         f"Words saved this batch: {words_saved_in_batch}\n" +
@@ -522,7 +502,7 @@ def process_words(words, json_file, batch_size):
             save_progress(word)
 
             # Adjust the sleep time based on API rate limits
-            time.sleep(0.1)  # Adjust based on API rate limit
+            time.sleep(0.05)  # Adjust based on API rate limit
 
         # After each batch, calculate and print the progress with remaining time
         print_progress(i, total_words_processed, batch_size)
