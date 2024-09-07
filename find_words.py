@@ -275,8 +275,8 @@ def process_words(words, json_file, batch_size=100):
         time.sleep(3)
 
 def main():
-    WORD_FILE = 'words2.txt'  # The 479k words file from GitHub or Kaggle
-    JSON_FILE = 'dictionary_words2.json'  # Output file
+    WORD_FILE = 'words.txt'  # The 479k words file from GitHub or Kaggle
+    JSON_FILE = 'dictionary_words.json'  # Output file
 
     if not os.path.exists(WORD_FILE):
         print(f"Error: Word file '{WORD_FILE}' not found!")
