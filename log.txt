@@ -1,6 +1,15 @@
-First session stats:
 
-System: Laptop
-Starting API usage: 6611
-Ending API usage:
+###############################################
+             SESSION 1 SUMMARY
+Session start: Saturday, September 07 03:42:34
+Session end:   Saturday, September 07 03:48:18
+Session searches: 500
+Average search time: 0.5275 seconds
+Session API usage: 185
+Session words saved: 158
+Session duplicates found: 0
+Session batches: 5
+API efficiency rate: 85.41%
+Session utilization rate: 37.0%
+###############################################
 
