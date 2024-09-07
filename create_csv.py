@@ -10,7 +10,7 @@ def initiate_csv():
     # Create headers
     with open('data.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['Session Number', 'Batch Number', 'Words Saved', 'API Efficiency Rate', 'Batch Utilization Rate', 'System'])
+        writer.writerow(['Session Number', 'Batch Number', 'Words Saved', 'API Efficiency Rate', 'Batch Utilization Rate', 'System', 'Duration (seconds)'])
 
 def add_data(file_content):
 
@@ -20,28 +20,45 @@ def add_data(file_content):
     efficiency_pattern = r'API\s+efficiency\s+rate:\s+(\d+\.\d+)'
     utilization_pattern = r'Batch\s+utilization\s+rate:\s+(\d+)'
     system_pattern = r'System:\s+([a-zA-Z]+)'
+    start_time_pattern = r'Start\s+Time:\s+\d+:(\d+):(\d+)'
+    end_time_pattern = r'End\s+Time:\s+\d+:(\d+):(\d+)'
 
     session_numbers = re.findall(session_pattern, file_content)
     words_numbers = re.findall(words_pattern, file_content)
     efficiency_numbers = re.findall(efficiency_pattern, file_content)
     utilization_numbers = re.findall(utilization_pattern, file_content)
     system_numbers = re.findall(system_pattern, file_content)
-
-    print(f"Session Numbers: {session_numbers}")
-    print(f"Words Numbers: {words_numbers}")
-    print(f"Efficiency Numbers: {efficiency_numbers}")
-    print(f"Utilization Numbers: {utilization_numbers}")
-    print(f"System Numbers: {system_numbers}")
+    start_times = re.findall(start_time_pattern, file_content)
+    end_times = re.findall(end_time_pattern, file_content)
 
     if len(session_numbers) != len(words_numbers):
         raise ValueError("Corrupted file, delete contents and try again")
 
     batch_numbers = list(range(len(session_numbers), 0, -1))
 
+    time_differences = []
+
+    for start_time, end_time in zip(start_times, end_times):
+        start_minutes, start_seconds = int(start_time[0]), int(start_time[1])
+        end_minutes, end_seconds = int(end_time[0]), int(end_time[1])
+
+        # Calculate the differences
+        minutes_diff = end_minutes - start_minutes
+        seconds_diff = end_seconds - start_seconds
+
+        # Handle negative seconds difference by adjusting the minutes difference
+        if seconds_diff < 0:
+            minutes_diff -= 1
+            seconds_diff += 60
+
+        # Append the differences to the list
+        time_differences.append((minutes_diff, seconds_diff))
+
     with open('data.csv', 'a', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        for session_num, batch_num, words_num, efficiency_num, utilization_num, system_num in zip(session_numbers, batch_numbers, words_numbers, efficiency_numbers, utilization_numbers, system_numbers):
-            writer.writerow([session_num, batch_num, words_num, efficiency_num, utilization_num, system_num])
+        for session_num, batch_num, words_num, efficiency_num, utilization_num, system_num, time_diff in zip(session_numbers, batch_numbers, words_numbers, efficiency_numbers, utilization_numbers, system_numbers, time_differences):
+            minutes_diff, seconds_diff = time_diff
+            writer.writerow([session_num, batch_num, words_num, efficiency_num, utilization_num, system_num, (minutes_diff*60) + seconds_diff])
 
 def write_csv(text_file_path):
     # Read the text file content

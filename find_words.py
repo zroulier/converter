@@ -5,9 +5,18 @@ import os
 import signal
 from datetime import datetime
 import pytz
+from create_csv import write_csv
 
-RUN_TIME = int(input('Choose number of batches for this session\n(100 searches per batch)\nBatch size:')) # of batches until program stops
+
+RUN_TIME = int(input('Choose number of batches for this session\n(100 searches per batch)\nBatch size:'))
+# of batches until program stops
 SYSTEM = input('What system are you on, | PC | or | Laptop |: ')
+if len(SYSTEM) == 2:
+    SYSTEM = SYSTEM.upper()
+else:
+    None
+
+
 timezone = pytz.timezone('America/New_York')
 
 # Your DictionaryAPI key
@@ -284,7 +293,7 @@ def print_total_summary():
     print(f"               END OF SESSION {total_session_count - 2}")
     print("                TOTAL SUMMARY")
     total_api_calls += total_words_recognized
-    print(f'Total API usage: {total_api_calls} ({32509 + total_api_calls} total api count)')
+    print(f'Total API usage: {total_api_calls} ({34333 + total_api_calls} total api count)')
     print(f'Total words saved: {round(total_word_stats, 0)}')
         # Calculate and print the total time elapsed
     current_run_time = time.time() - start_time
@@ -363,7 +372,7 @@ def print_progress(i, total_words_processed, batch_size):
     print("*The next batch will begin in 5 seconds")
     print("\n" * 3)
 
-def log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch):
+def log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch, batch_start_time, batch_endtime):
     global total_session_count
     elapsed_time = time.time() - start_time + total_elapsed_time  # Add current elapsed time to total
     progress_percentage = total_words_processed / TOTAL_WORDS * 100
@@ -378,7 +387,6 @@ def log_progress_to_file(i, total_words_processed, batch_size, start_time, total
     minutes, seconds = divmod(rem, 60)
     
     batch_endtime = datetime.now(timezone)
-    formatted_endtime = batch_endtime.strftime("%c")
 
     batch_counter = round(total_searches / 100,0)
     load_session_count()
@@ -388,7 +396,8 @@ def log_progress_to_file(i, total_words_processed, batch_size, start_time, total
         "\n" * 1 +
         f'Session {total_session_count} Batch {int(batch_counter)}\n'
         "###############################################\n" + 
-        f'{formatted_endtime[:19]}\n' +
+        f'Start Time: {batch_start_time.strftime("%X")}\n' +
+        f'End Time: {batch_endtime.strftime("%X")}\n' +
         f'System: {SYSTEM}\n' +
         f'Progress: {total_words_processed}/{TOTAL_WORDS} | {progress_percentage:.5f}%\n' +
         f'Estimated Time Remaining: {int(days)} days, {int(hours)}:{int(minutes)}:{int(seconds)}\n' +
@@ -434,6 +443,9 @@ def process_words(words, json_file, batch_size):
         total_session_batches += 1  # Increment the session batch count here
         words_saved_in_batch = 0  # Counter for words saved in the current batch
         words_recognized_in_batch = 0
+
+        # Set the start time for the batch (before processing starts)
+        batch_start_time = datetime.now(timezone)  # Correctly store the batch start time
 
         if total_session_batches > RUN_TIME:
             save_api_use()
@@ -504,11 +516,15 @@ def process_words(words, json_file, batch_size):
             # Adjust the sleep time based on API rate limits
             time.sleep(0.05)  # Adjust based on API rate limit
 
+        # After the batch finishes processing, set the batch end time
+        batch_endtime = datetime.now(timezone)  # Set the end time after the batch completes
+
         # After each batch, calculate and print the progress with remaining time
         print_progress(i, total_words_processed, batch_size)
-        log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch)
+        log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch, batch_start_time, batch_endtime)
         
         # Pause after each batch to avoid overwhelming the API
+        write_csv(text_file_path='batch_log.txt')
         time.sleep(5)
 
 
