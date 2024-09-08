@@ -1,0 +1,45 @@
+---------------
+             Session 1 Summary
+Start time:     September 08, 00:48:35
+End time:       September 08, 00:50:15
+Searches:       204
+Average time:   0.4933075049019608 seconds
+API usage:      74
+Words saved:    60
+Batches:        3
+API Efficiency: 81.08%
+Utilization:    36.27%
+
+---------------
+
+
+---------------
+             Session 2 Summary
+Start time:     September 08, 00:48:35
+End time:       September 08, 00:50:15
+Searches:       204
+Average time:   0.4933075049019608 seconds
+API usage:      74
+Words saved:    60
+Batches:        3
+API Efficiency: 81.08%
+Utilization:    36.27%
+
+---------------
+
+
+---------------
+             Session 1 Summary
+Start time:     September 08, 00:48:35
+End time:       September 08, 00:50:15
+Searches:       204
+Average time:   0.4933075049019608 seconds
+API usage:      74
+Words saved:    60
+Batches:        3
+API Efficiency: 81.08%
+Utilization:    36.27%
+
+---------------
+
+
