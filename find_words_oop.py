@@ -149,14 +149,15 @@ class FindWords:
 
                             # Filter unrecognized POS
                             if part_of_speech in ACCEPTED_POS:
+                                percentage = ((self.session_live_entry_count / (self.lot_size * self.batch_size)) * 100)
                                 if self.session_search_count < 10:
-                                    print(f'{Fore.RED}[{(self.session_live_entry_count / (self.lot_size * self.batch_size)) * 100}%]{Style.RESET_ALL}{(' ' * 4)} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
+                                    print(f'{Fore.RED}[{percentage:.0f}%]{Style.RESET_ALL}{' ' * 4} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
                                 elif self.session_search_count < 100:
-                                    print(f'{Fore.RED}[{int((self.session_live_entry_count / (self.lot_size * self.batch_size)) * 100,0)}%]{Style.RESET_ALL}{('' * 1) + (' ' * 3)} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
+                                    print(f'{Fore.RED}[{percentage:.0f}%]{Style.RESET_ALL}{' ' * 3} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
                                 elif self.session_search_count < 1000:
-                                    print(f'{Fore.RED}[{int((self.session_live_entry_count / (self.lot_size * self.batch_size)) * 100,0)}%]{Style.RESET_ALL}{('' * 1) + (' ' * 2)} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
+                                    print(f'{Fore.RED}[{percentage:.0f}%]{Style.RESET_ALL}{' ' * 2} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
                                 elif self.session_search_count < 10000:
-                                    print(f'{Fore.RED}[{int((self.session_live_entry_count / (self.lot_size * self.batch_size)) * 100,0)}%]{Style.RESET_ALL}{('' * 1) + (' ' * 1)} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
+                                    print(f'{Fore.RED}[{percentage:.0f}%]{Style.RESET_ALL}{' ' * 1} FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{' ' * (15 - len(word))} | Type: {Fore.BLUE}{part_of_speech}{Style.RESET_ALL}')
                             return {
                                 'word': word,
                                 'part_of_speech': part_of_speech
