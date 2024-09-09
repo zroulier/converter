@@ -1,15 +1,34 @@
 [
     {
-        "word": "aalst",
-        "part_of_speech": "geographical name"
-    }
-][
+        "word": "aardvark",
+        "part_of_speech": "noun"
+    },
     {
-        "word": "aalst",
+        "word": "aardvarks",
+        "part_of_speech": "noun"
+    },
+    {
+        "word": "aardwolf",
+        "part_of_speech": "noun"
+    },
+    {
+        "word": "aardwolves",
+        "part_of_speech": "noun"
+    },
+    {
+        "word": "aargau",
         "part_of_speech": "geographical name"
     },
     {
-        "word": "aarau",
+        "word": "aarhus",
         "part_of_speech": "geographical name"
+    },
+    {
+        "word": "aaron",
+        "part_of_speech": "noun"
+    },
+    {
+        "word": "aaronic",
+        "part_of_speech": "adjective"
     }
-]
+]
