@@ -1,497 +1,297 @@
+import pytz
+import os
 import requests
 import json
+import colorama as colorama
+from colorama import Fore, Style
 import time
-import os
-import signal
 from datetime import datetime
-import pytz
-from create_csv import write_csv
-from constants import *
+import sys
+import csv
+import shutil
 
-# Declare Variables
-LOT_SIZE = int(input('Select Lot Size (' + str(BATCH_SIZE) + ' searches per lot)\n: '))
-SYSTEM_SESSION = input('What system are you on, | PC | or | Laptop |\n: ').lower()
-if SYSTEM_SESSION == 'pc':
-    SYSTEM_SESSION = 'PC'
-elif SYSTEM_SESSION == 'laptop':
-    SYSTEM_SESSION = 'Laptop'
-else:
-    SYSTEM_SESSION - 'Other'
+INPUT_FILE = 'words.txt'
+OUTPUT_FILE = 'data.csv'
+API_KEY = 'f5d9fd44-6ab6-4b32-af6a-f6e75d642ad5'
+API_URL = 'https://www.dictionaryapi.com/api/v3/references/collegiate/json/{}?key={}'
 
+ACCEPTED_POS = {
+    'noun',
+    'plural noun',
+    'proverbial saying',
+    'pronoun',
+    'verb',
+    'adjective',
+    'adverb',
+    'preposition',
+    'idiom',
+    'geographical name',
+    'exclamation',
+    'conjunction',
+    'determiner',
+    'numeral'}
 
-# Initialize Counters
-total_session_batches = 0
-total_searches = 0
-total_words_recognized = 0
-session_words = 0
-total_duplicates = 0
-total_search_time = 0.0  # To track the total time spent on searches
-start_time = time.time()  # Track the start time of the current run
-session_start_time = datetime.now(TIMEZONE)
-total_elapsed_time = 0.0  # To track the cumulative elapsed time across runs
-total_words_processed = 0  # Track the total number of words processed
-total_api_calls = 0
-total_session_count = 0
+class FindWords:
+    def __init__(self):
+        self.starting_search_index = 0
+        self.session_number = 1
+        self.batch_number = 1
+        self.total_words_saved = 0
+        self.average_search_time = 0
+        self.batch_count = 0
+        self.total_searches = 0
+        self.terminal_size = os.get_terminal_size()
+        self.terminal_width =  self.terminal_size.columns
+        self.terminal_height = self.terminal_size.lines
+        self.columns = shutil.get_terminal_size().columns
+        self.session_word_count = 0
+        self.session_search_count = 0
 
+    def load_input_data(self):
+        if self.starting_search_index == 0: # If starting for the first time
+            with open(INPUT_FILE, 'r') as f:
+                words = [line.strip().lower() for line in f if line.strip()]
+                return words
+        else:                               # Optimized by only loading remaining searches
+            with open(INPUT_FILE, 'r') as f:
+                words = [line.strip().lower() for line in f if line.strip()]
+                remaining_data = words[self.total_searches:]
+                return remaining_data
 
-# Initial startup
-def load_data(word_file):
-    session_count = fetch_session_count()
-    print(f'Starting Session {session_count + 1}...')
-    time.sleep(3)
-    print("Loading words from file...")
-    with open(word_file, 'r') as f:
-        words = [line.strip().lower() for line in f if line.strip()]
-    load_progress()
-    remaining = 466275 - total_words_processed
-    print(f"Loaded {remaining} words.")
-    
-    print('Loading progress...')
-    if os.path.exists(JSON_FILE):
-        with open(JSON_FILE, 'r') as f:
-            try:
-                word_list = json.load(f)
-                if word_list:
-                    last_entry = word_list[-1]
-                    last_word = last_entry.get('word')
-                    return last_word
-            except json.JSONDecodeError:
-                print('Error: Could not read the JSON file')
-                return None
-    else:
-        print(f'{JSON_FILE} not found')
-    print('No previous progress found')
-    print('Beginning First Session...')
-    run_batch()
+    def load_save_point(self): # Get last session number & last word searched & total search count
+        with open(OUTPUT_FILE, mode='r', newline='') as file:
+            previous_search_time = 0
+            reader = csv.reader(file)
+            rows = [row for row in reader if any(row)]
 
-# Load last processed word (progress counter)
-def load_progress():
-    if os.path.exists(JSON_FILE):
-        with open(JSON_FILE, 'r') as f:
-            try:
-                word_list = json.load(f)
-                if word_list:
-                    last_entry = word_list[-1]
-                    last_word = last_entry.get('word')
-                    if last_word:
-                        return last_word
-            except json.JSONDecodeError:
-                print('Error: Could not read the JSON file')
-                return None
-    else:
-        print(f'{JSON_FILE} not found')
-    return None
+            data_rows = rows[1:-1]
+            self.aggregate_row = rows[-1]
 
+            for row in data_rows:
+                previous_search_time += float(row[5])
 
-# Load total words processed from a file
-def track_progress(last_word):
-    WORD_FILE = 'words.txt'
-    try:
-        with open(WORD_FILE, 'r') as f:
-            for index, line in enumerate(f):
-                if line.strip() == last_word:
-                    print(f"Found '{last_word}' at line {index + 1}")
-                    return index + 1  # Return the line number (1-based index)
-    except FileNotFoundError:
-        print(f"Error: File '{WORD_FILE}' not found.")
-        return None
-    
-    print(f"'{last_word}' not found in {WORD_FILE}.")
-    return None
-
-def fetch_session_count():
-    FILE_PATH = 'log.txt'
-    try:
-        with open(FILE_PATH, 'r') as f:
-            line_count = sum(1 for _ in f)
-            session_count = line_count / 15
-        return session_count
-    except FileNotFoundError:
-        print(f"Error: File '{FILE_PATH}' not found.")
-        return None
-
-def store_unrecognized(word):
-    with open('unrecognized_searches.txt', 'a') as f:
-        f.write(f'{word}\n')
-
-# Duplicate Filter
-def word_exists_in_json(word, json_file):
-    existing_data = load_existing_dictionary(json_file)
-    for entry in existing_data:
-        if entry.get("word") == word:
-            return True
-    return False
-
-# API Call
-def fetch_word(word):
-    global total_searches, total_search_time
-    total_searches += 1
-    
-    retries = 3
-    
-    for attempt in range(retries):
-        try:
-            start_search = time.time()  # Search timer start
-            response = requests.get(API_URL.format(word, API_KEY), timeout=10)
-            end_search = time.time()  # Search time end
-            
-            search_duration = end_search - start_search
-            search_duration += search_duration
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Filter searches
-                if isinstance(data, list) and len(data) > 0:
-                    if isinstance(data[0], dict) and 'fl' in data[0]:
-                        part_of_speech = data[0]['fl']
-                        
-                        # Filter out unrecognized calls
-                        if part_of_speech in ACCEPTED_POS:
-                            print(f"[{round(total_searches / LOT_SIZE, 2)}%]   FOUND {word} {'' * (25 - len(word))} ({part_of_speech})")
-                        return {
-                            'word': word,
-                            'part_of_speech': part_of_speech
-                        }
-                    else:
-                        return None
-            break
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-            print(f"Error processing '{word}' - retrying ({attempt + 1}/{retries})...")
-            time.sleep(2 ** attempt)
-    return None
-
-# Read the existing JSON data from the file
-def load_existing_dictionary(json_file):
-    if os.path.exists(json_file):
-        with open(json_file, 'r') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
-
-# Update dictionary file
-def save_to_dictionary(word_info, json_file):
-    global session_words, total_duplicates
-    existing_data = load_existing_dictionary(json_file)
-
-    # Duplicate check
-    if word_info in existing_data:
-        total_duplicates += 1
-        print(f"Duplicate found: {word_info['word']} (Not saved)")
-    else:
-        existing_data.append(word_info)
-        session_words += 1
-        with open(json_file, 'w') as f:
-            json.dump(existing_data, f, indent=4)
-
-
-# Save Session Summary
-def log_session():
-    global total_searches, total_words_recognized, session_words, total_duplicates, total_session_batches, total_elapsed_time, total_session_count
-    
-    if os.path.exists('log.txt'):
-        with open('log.txt', 'r') as f:
-            log_content = f.readlines()
-    else:
-        log_content = []
-
-    # Calculate total summary based on log and current session
-    total_searches_all = total_searches
-    total_words_recognized_all = total_words_recognized
-    total_words_saved_all = session_words
-    total_duplicates_all = total_duplicates
-    total_batches_all = total_session_batches - 1
-
-    # Extract the previous total summary if present and update values
-    if log_content and log_content[0].startswith("Total Summary:"):
-        try:
-            # Parse previous totals from log file
-            total_searches_all += int(log_content[1].split(': ')[1])
-            total_words_recognized_all += int(log_content[2].split(': ')[1])
-            total_words_saved_all += int(log_content[3].split(': ')[1])
-            total_duplicates_all += int(log_content[4].split(': ')[1])
-            total_batches_all += int(log_content[5].split(': ')[1])
-        except (IndexError, ValueError):
-            pass  # In case there's an issue with the previous log, ignore it
-
-    # Write the updated total summary at the top of the file
-    with open('log.txt', 'w') as f:
-        f.write('\n' + ('-' * 47) + '\n')
-        session_count = fetch_session_count()
-        f.write((' ' * 13) + f'Session {session_count} Summary\n')
-        session_end = datetime.now(TIMEZONE)
-        f.write(f'Session start:       {session_start_time.strftime("%A")}, {session_start_time.strftime("%B")} {session_start_time.strftime("%d")} {session_start_time.strftime("%X")}\n')
-        f.write(f'Session end:         {session_end.strftime("%A")}, {session_end.strftime("%B")} {session_end.strftime("%d")} {session_end.strftime("%X")}\n')
-        f.write(f'Session searches:    {total_searches}\n')
-        if total_searches > 0:
-            average_search_time = total_search_time / total_searches
-            f.write(f"Avg. search time:    {average_search_time:.4f} seconds\n")
-        f.write(f"Session API usage:   {total_words_recognized}\n")
-        f.write(f"Words saved:         {session_words}\n")
-        f.write(f"Duplicates found:    {total_duplicates}\n")
-        f.write(f'Batches complete:    {total_session_batches - 1}\n')
-        f.write(f'API Efficiency:      {round((session_words / total_words_recognized) * 100, 2)}%\n')
-        f.write(f'Program Utilization: {round((total_words_recognized / total_searches) * 100, 2)}%\n')
-        f.write("###############################################\n\n")
-
-        # # Write the original log content after the total summary
-        f.writelines(log_content)
-
-def print_total_summary():
-    global total_elapsed_time
-    global total_api_calls
-    global total_words_processed
-    global total_session_count
-    session_count = fetch_session_count()
-    # load_apiuse()
-    
-    with open('dictionary_words.json', 'r') as f:
-        total_word_stats = (sum(1 for line in f) - 2) / 4
-
-    print("-----------------------------------------------")
-    # print(f"               END OF SESSION {session_count - 2}")
-    print("                TOTAL SUMMARY")
-    total_api_calls += total_words_recognized
-    # print(f'Total API usage: {total_api_calls} ({37641 + total_api_calls} total api count)')
-    print(f'Total words saved: {round(total_word_stats, 0)}')
-        # Calculate and print the total time elapsed
-    current_run_time = time.time() - start_time
-    total_elapsed_time += current_run_time  # Add the current run's time to the total elapsed time
-    print(f"Total time elapsed: {round(total_elapsed_time,2):.2f} seconds")
-        # Calculate and print the progress
-    total_progress = (total_words_processed / TOTAL_WORDS) * 100
-    print(f"Progress: {total_words_processed}/{TOTAL_WORDS} ({total_progress:.4f}%)")
-    print("-----------------------------------------------")
-
-# Handle script cancellation and print summary
-# Update signal_handler function to include update_log call
-def signal_handler(signal, frame):
-    session_count = fetch_session_count()
-    global start_time, total_words_processed, total_elapsed_time, total_session_count
-    print("\n" * 30)
-    print("-----------------------------------------------")
-    print(f"             SESSION {session_count - 2} SUMMARY")
-    x = datetime.now(TIMEZONE)
-    print(f'Session start:    {session_start_time.strftime("%A")}, {session_start_time.strftime("%B")} {session_start_time.strftime("%d")} {session_start_time.strftime("%X")}')
-    print(f'Session end:      {x.strftime("%A")}, {x.strftime("%B")} {x.strftime("%d")} {x.strftime("%X")}')
-    print(f"Searches:         {total_searches}")
-    # Calculate and print the average search time
-    if total_searches > 0:
-        average_search_time = total_search_time / total_searches
-        print(f"Avg. search time: {average_search_time:.4f} seconds")
-    print(f"API usage:        {total_words_recognized}")
-    print(f"Words saved:      {session_words}")
-    print(f"Doubles found:    {total_duplicates}")
-    print(f'Batches:          {total_session_batches - 1}')
-    print(f'API efficiency:   {round((session_words / total_words_recognized) * 100, 2)}%')
-    print(f'Utilization rate: {round((total_words_recognized / total_searches) * 100, 2)}%')
-    print("-----------------------------------------------")
-    print("\n")
-    print_total_summary()
-    print("\n")
-    
-    exit(0)
-
-# Calculate and print estimated remaining time
-def print_progress(i, total_words_processed, batch_size):
-    elapsed_time = time.time() - start_time + total_elapsed_time  # Add current elapsed time to total
-    progress_percentage = total_words_processed / TOTAL_WORDS * 100
-    searches_processed = total_words_processed
-    searches_remaining = TOTAL_WORDS - searches_processed
-    average_search_time = elapsed_time / searches_processed if searches_processed > 0 else 0
-    remaining_time = searches_remaining * average_search_time
-
-    # Convert remaining_time to days, hours, minutes, and seconds
-    days, rem = divmod(remaining_time, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    last_word = load_progress()
-    last_word_index = track_progress(last_word)
-    print(last_word_index)
-    
-    print("\n" * 35)
-    print("-----------------------------------------------")
-    print(f'SAVED BATCH {int(total_searches / 100)}. PROGRESS: {last_word_index}/{TOTAL_WORDS} ({progress_percentage:.4f}%)')
-    print(f'SESSIONS REMAINING: {LOT_SIZE - int(total_searches / 100)}')
-    print(f'ESTIMATED TIME REMAINING: {int(days)}D {int(hours)}H {int(minutes)}M {int(seconds)}S')
-    print(f"WORDS SAVED THIS BATCH: {words_saved_in_batch}")
-    print(f'EFFICIENCY RATE OF API: {round(words_saved_in_batch/words_recognized_in_batch * 100, 2)}%')
-    print(f'BATCH UTILIZATION RATE: {words_recognized_in_batch}%')
-    print("-----------------------------------------------")
-    print("*The next batch will begin in 5 seconds")
-    print("\n" * 1)
-
-def log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch, batch_start_time, batch_endtime):
-    global total_session_count
-    elapsed_time = time.time() - start_time + total_elapsed_time  # Add current elapsed time to total
-    progress_percentage = total_words_processed / TOTAL_WORDS * 100
-    searches_processed = total_words_processed
-    searches_remaining = TOTAL_WORDS - searches_processed
-    average_search_time = elapsed_time / searches_processed if searches_processed > 0 else 0
-    remaining_time = searches_remaining * average_search_time
-
-    # Convert remaining_time to days, hours, minutes, and seconds
-    days, rem = divmod(remaining_time, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    
-    batch_endtime = datetime.now(TIMEZONE)
-
-    batch_counter = round(total_searches / 100,0)
-    session_count = fetch_session_count()
-
-
-    log_message = (
-        "\n" * 1 +
-        f'Session {session_count} Batch {int(batch_counter)}\n'
-        "-----------------------------------------------\n" + 
-        f'Start Time: {batch_start_time.strftime("%X")}\n' +
-        f'End Time: {batch_endtime.strftime("%X")}\n' +
-        f'System: {SYSTEM_SESSION}\n' +
-        f'Progress: {total_words_processed}/{TOTAL_WORDS} | {progress_percentage:.5f}%\n' +
-        f'Estimated Time Remaining: {int(days)} days, {int(hours)}:{int(minutes)}:{int(seconds)}\n' +
-        f"Words saved this batch: {words_saved_in_batch}\n" +
-        f'API efficiency rate: {round(words_saved_in_batch/words_recognized_in_batch * 100, 2)}%\n' +
-        f'Batch utilization rate: {words_recognized_in_batch}%\n' +
-        "-----------------------------------------------\n" +
-        "\n" * 2
-    )
-
-    if os.path.exists('batch_log.txt'):
-        with open('batch_log.txt', 'r') as f:
-            batch_log_content = f.read()
-    else:
-        batch_log_content = ''
-    
-    updated_batch_log_content = log_message + batch_log_content
-
-    with open('batch_log.txt', 'w') as f:
-        f.write(updated_batch_log_content)
-
-
-# Begin batch cycle
-def run_batch(words, json_file, batch_size):
-    global total_words_recognized, total_duplicates, total_words_processed, total_session_batches  # Declare global variables
-
-    # Load the last processed word
-    last_search = load_progress()
-
-    # Find where last session left off
-    start_idx = 0
-    if last_search:
-        try:
-            start_idx = words.index(last_search) + 1
-        except ValueError:
-            print("Last processed word not found in the current word list. Starting from the beginning.")
-            start_idx = 0  # First time user starts from the beginning
-
-    total_words = len(words)
-    for i in range(start_idx, total_words, batch_size):
-        global start_time, total_words_processed, total_elapsed_time, words_saved_in_batch, words_recognized_in_batch, total_session_count
-        total_session_batches += 1
-        words_saved_in_batch = 0
-        words_recognized_in_batch = 0
-
-        batch_start_time = datetime.now(TIMEZONE)  # Set batch start time
-
-        if total_session_batches > LOT_SIZE:
-            log_session()
-            session_count = fetch_session_count()
-            print("\n")
-            print("\n")
-            print("-----------------------------------------------")
-            fetch_session_count()
-            print(f"             SESSION {session_count} SUMMARY")
-            x = datetime.now(TIMEZONE)
-            print(f'Session start: {session_start_time.strftime("%A")}, {session_start_time.strftime("%B")} {session_start_time.strftime("%d")} {session_start_time.strftime("%X")}')
-            print(f'Session end:   {x.strftime("%A")}, {x.strftime("%B")} {x.strftime("%d")} {x.strftime("%X")}')
-            print(f"Session searches: {total_searches}")
-            # Calculate and print the average search time
-            if total_searches > 0:
-                average_search_time = total_search_time / total_searches
-                print(f"Average search time: {average_search_time:.4f} seconds")
-            print(f"Session API usage: {total_words_recognized}")
-            print(f"Session words saved: {session_words}")
-            print(f"Session duplicates found: {total_duplicates}")
-            print(f'Session batches: {total_session_batches - 1}')
-            print(f'API efficiency rate: {round((session_words / total_words_recognized) * 100, 2)}%')
-            print(f'Session utilization rate: {round((total_words_recognized / total_searches) * 100, 2)}%')
-            print("-----------------------------------------------")
-            print("\n")
-            print_total_summary()
-            print("\n")
-            
-            # Call update_log to log the session and total summary
-            
-            # Save total words processed and elapsed time
-            break
-        
-        batch_words = words[i:i + batch_size]
-        for word in batch_words:
-            total_words_processed += 1  # Increment the word processing counter
-
-            # Check if the word already exists in the JSON file to avoid unnecessary API calls
-            if word_exists_in_json(word, json_file):
-                total_duplicates += 1
-                continue
-
-            # If the word is not found, query the API
-            word_info = fetch_word(word)
-            if word_info:
-                # Only count the word as recognized if we successfully got valid part of speech data
-                if word_info['part_of_speech']:
-                    total_words_recognized += 1
-                    words_recognized_in_batch += 1
-
-                # Check if the part of speech is in the accepted list
-                if word_info['part_of_speech'] in ACCEPTED_POS:
-                    save_to_dictionary(word_info, json_file)  # Save if it matches accepted parts of speech
-                    words_saved_in_batch += 1  # Increment the count of words saved in this batch
-                else:
-                    store_unrecognized(word)
+            if self.aggregate_row:
+                self.total_searches = int(self.aggregate_row[-1])
+                self.starting_search_index = self.total_searches + 1 # Starting point for program (total search count should = starting search index - 1)
+                self.session_number = int(data_rows[1][0]) + 1
+                self.total_words_saved = len(data_rows)
+                self.average_search_time = previous_search_time / self.total_words_saved
+                # import pdb; pdb.set_trace()
             else:
-                store_unrecognized(word)
+                self.total_searches = 0
 
-            # Save progress after each word is processed (even if not saved)
+    def initialize(self):
+        if not os.path.exists(OUTPUT_FILE): # New user installation
+            welcome_msg = 'Welcome to this word finding script!'
+            welcome_msg_len = int(len(welcome_msg))
+            new_line = '\n'
+            print(new_line * ((self.terminal_height // 2) + 1))
+            
+            for i in range(5): # Start Screen Animation
+                os.system('cls')
+                print(new_line * (i * 6))
+                print(Fore.YELLOW + '-' * self.terminal_width)
+                print((' ' * ((self.terminal_width // 2) - (int(len(welcome_msg)) // 2))) + welcome_msg + (' ' * ((self.terminal_width // 2) - (int(len(welcome_msg)) // 2))))
+                print('-' * self.terminal_width + Style.RESET_ALL)
+                print(Fore.RED + (' ' * ((self.terminal_width // 2) + 4 - int(len(welcome_msg)) // 2)) + 'No previous progress found\n')
+                print(Fore.GREEN + (' ' * ((self.terminal_width // 2) - 1 - int(len(welcome_msg)) // 2)) + 'Intializing script for first time use' + Style.RESET_ALL)
+                time.sleep(1)
+            time.sleep(3) # Start Screen Animation 5 second pause before disappearing
 
-            # Adjust the sleep time based on API rate limits
-            time.sleep(0.05)  # Adjust based on API rate limit
+            print(new_line * (self.terminal_height))
+            print(f'{Fore.GREEN}Creating Files...')
+            time.sleep(1)
+            
+            # Create output file
+            if not os.path.exists(OUTPUT_FILE):
+                try:
+                    with open(OUTPUT_FILE, 'w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerow(['Session Number', 'Batch Number', 'Search Index', 'Word', 'Part of Speech', 'Search Time', 'System Name', 'Aggregate Search Count'])
+                        aggregate_row = ['-','-','-','-','-','-','-',0]
+                        writer.writerow(aggregate_row)
+                        self.aggregate_row = aggregate_row
+                        print(f'{Fore.GREEN}\nCreated {Fore.BLUE}{OUTPUT_FILE}{Style.RESET_ALL}')
+                        time.sleep(0.2)
+                        print(new_line)
+                        time.sleep(1)
+                except OSError as e:
+                    print('Error creating ' + OUTPUT_FILE)
+            else:
+                print(f'\n{Fore.BLUE} {OUTPUT_FILE} {Fore.YELLOW} already exists{Style.RESET_ALL}')
+                print(f'\n{Fore.CYAN}During initialization, files should not be found. A clean installation is recommended to ensure functionality')
+                if input('Would you like to close the program? (Y/N)\n' + Style.RESET_ALL).upper() == 'Y':
+                    sys.exit()
+                else:
+                    print(f'\nContinuing installation with saved version of {Fore.YELLOW}{OUTPUT_FILE}{Style.RESET_ALL}')
+                    print(f'This is {Fore.RED}{Style.BRIGHT}NOT{Style.RESET_ALL} recommended. Either verify correct file formatting or delete the file and re-run program')
+                    time.sleep(1)
 
-        # After the batch finishes processing, set the batch end time
-        batch_endtime = datetime.now(TIMEZONE)  # Set the end time after the batch completes
+            if os.path.exists(INPUT_FILE):
+                try:
+                    with open(INPUT_FILE, 'r') as file:
+                        input_txt_content = file.read()
+                        total_index = sum(1 for row in input_txt_content)
+                    print(f'{Fore.GREEN}Loaded {Style.RESET_ALL}{Fore.BLUE}{INPUT_FILE}{Style.RESET_ALL}')
+                    time.sleep(0.2)
+                    print(new_line)
+                    time.sleep(0.2)
+                except OSError as e:
+                    print(f'Error adding {INPUT_FILE} {input}: {e}')
+            else:
+                print(f'\n{Fore.BLUE}"{INPUT_FILE}"{Fore.RED}NOT{Fore.WHITE} found. Please ensure you cloned the github repository correctly.{Style.RESET_ALL}')
 
-        # After each batch, calculate and print the progress with remaining time
-        print_progress(i, total_words_processed, batch_size)
-        log_progress_to_file(i, total_words_processed, batch_size, start_time, total_elapsed_time, TOTAL_WORDS, words_saved_in_batch, words_recognized_in_batch, batch_start_time, batch_endtime)
+            print(new_line * self.terminal_height)
+            print(f'{Fore.GREEN}Installation Success!{Style.RESET_ALL}')
+            print(f'{new_line * self.terminal_height}{Fore.YELLOW}Running Session Start...{Style.RESET_ALL}')
+            time.sleep(2)
+        else: # Returning user load data
+            self.load_save_point()
+
+            welcome_msg = 'Welcome back to word finding script!'
+            new_line = '\n'
+            print(new_line * ((self.terminal_height // 2) + 1))
+            
+            for i in range(5): # Start Screen Animation
+                os.system('cls')
+                print(new_line * (i * 6))
+                print(Fore.YELLOW + '-' * self.terminal_width)
+                print('Welcome back to word finding script!'.center(self.columns))
+                print(f'{' ' * ( (self.terminal_height))}') 
+                print('-' * self.terminal_width + Style.RESET_ALL)
+                print(f'{Fore.CYAN}{round((self.total_searches / 466275) * 100, 2)}% total progress'.center(self.columns))
+                print(f'{Fore.CYAN}{self.total_words_saved} words have been saved{Style.RESET_ALL}'.center(self.columns))
+                print(f'{Fore.CYAN}{round(self.average_search_time, 4)}s average time per search'.center(self.columns))
+                time.sleep(1)
+            time.sleep(3) # Start Screen Animation 5 second pause before disappearing
+
+            print(new_line * (self.terminal_height))
+            time.sleep(1)
+
+    def choose_session_settings(self, input_data):
+        print(f'{Fore.WHITE}{'\n' * self.terminal_height}{Fore.YELLOW}Begin by entering your session settings below: \n{Style.RESET_ALL}')
+        if input(f'Default value of searches per batch is {Fore.GREEN}100{Style.RESET_ALL}:{Style.RESET_ALL}\nContinue with default? (Y/N): ').upper() == 'Y':
+            self.lot_size = 100
+        else:
+            self.lot_size = int(input('Enter Lot Size: '))
+        print(f'{"#\n" * 5}{Style.BRIGHT + Fore.RED}**{Fore.WHITE} {str(self.lot_size)} searches per lot {Fore.RED}**{Style.RESET_ALL}')
+        self.num_batches = int(input('Choose Session Batch Amount: '))
+        self.cooldown_time = float(input('Choose Cooldown Time between Batches: '))
+        self.session_name = input(f'Choose your system name for this session: {Style.RESET_ALL}').upper()
+
+        print(f'{'\n' * self.terminal_height}')
+        print(f'{Fore.CYAN}Loaded {len(input_data)} remaining searches{Style.RESET_ALL}')
+        print(f'{Fore.GREEN}Beginning Batch {self.batch_number}... {Style.RESET_ALL}')
+        time.sleep(3)
+
+    def api_call(self, word):
+        for attempt in range(3):
+            try:
+                start_search = time.time()
+                response = requests.get(API_URL.format(word, API_KEY))
+                end_search = time.time()
+                search_time = round(end_search - start_search, 6)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    self.batch_count += 1
+                    self.total_searches += 1
+                    self.session_search_count += 1
+                                        
+                    with open(OUTPUT_FILE, 'r') as f:
+                        reader = csv.reader(f)
+                        rows = [row for row in reader if any(row)]
+
+                    header_row = rows[0]
+                    self.aggregate_row = rows[-1]
+                    self.aggregate_row[7] = str(self.total_searches)
+                    rows[-1] = self.aggregate_row
+
+                    with open(OUTPUT_FILE, 'w', newline='') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(header_row)
+                        for row in rows[1:]:
+                            writer.writerow(row)
+
+                    # print(f'Batch searches: {self.batch_count}\nTotal Searches: {self.total_searches}')
+
+
+                    if isinstance(data, list) and len(data) > 0:
+                          if isinstance(data[0], dict) and 'fl' in data[0]:
+                            part_of_speech = data[0]['fl']
+
+                            if part_of_speech in ACCEPTED_POS:
+                                
+                                self.session_word_count += 1
+
+                                percent_batch_complete = round(int((self.batch_count / self.lot_size) * 100),0)
+                                percent_session_complete = round(((self.batch_count + ((self.batch_number - 1) * self.lot_size)) / (self.num_batches * self.lot_size)) * 100,0)
+                                percent_session_complete = int(percent_session_complete)
+                                percent_total_complete = round((self.total_searches / 466275) * 100,0)
+                                percent_total_complete = int(percent_total_complete)
+                                
+                                print(f'{Fore.LIGHTRED_EX}[{percent_total_complete}%][{percent_session_complete}%][{percent_batch_complete}%] {Style.RESET_ALL}{Fore.GREEN}FOUND {Fore.CYAN}{word}{Style.RESET_ALL} | Type: {Fore.YELLOW}{part_of_speech}')
+                                
+                                new_row = self.session_number, self.batch_number, self.total_searches, word, part_of_speech, search_time, self.session_name, ''
+                                rows.insert(1, new_row)
+
+                                with open(OUTPUT_FILE, 'w', newline='') as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow(header_row)
+                                    for row in rows[1:]:
+                                        writer.writerow(row)
+                                return
+                    return None
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                print(f'Error processing {word} - retrying {attempt + 1}/3')
+                time.sleep(2 ** attempt)
+        return None
+
+    def run_batch_cycle(self, input_data): # Completes a loop of api calls for one batch
+        while self.batch_count < self.lot_size:
+            word = input_data[self.batch_count + (100 * (self.batch_number - 1))]
+            self.api_call(word)
+            time.sleep(0.1)
+
+    def end_session(self):
+        # Session Summary
+        print('\n' * (self.terminal_height // 2))
+        print(f'{Fore.LIGHTMAGENTA_EX}Session {self.session_number} Summary'.center(self.columns))
+        print(f'Session Start Time: {self.session_start_time}'.center(self.columns))
+        print(f'Session End Time: {self.session_end_time}'.center(self.columns))
+        print(f'Session Word Count: {self.session_word_count}'.center(self.columns))
+        print(f'Average Search Time: {round(self.average_search_time,4)} seconds'.center(self.columns))
+        print(f'Total Progress Gained: {round((self.session_search_count / 466275 ) * 100,3)}%'.center(self.columns))
+        print(f'{'\n' * 2} You may now safely exit the program.\n\n')
+        time.sleep(10)
+        sys.exit()
         
-        # Pause after each batch to avoid overwhelming the API
-        write_csv(text_file_path='batch_log.txt')
-        time.sleep(5)
+    def run(self):
+        self.initialize() # Installs if new user, loads progress if returning user
+
+        self.input_data = self.load_input_data() # Loads remaining searches
+
+        self.choose_session_settings(self.input_data) # 
+        
+        self.session_start_time = datetime.now()
+        
+        # Batch loop
+        while self.batch_number < self.num_batches + 1:
+            self.run_batch_cycle(self.input_data)
+            self.batch_number += 1
+            print('\n' * 10)
+            print(f'Batch {self.batch_number} begins in {str(self.cooldown_time)[0]} seconds...')
+            print(f'Session progress: {round((self.batch_number/(self.num_batches + 1)) * 100,5)}%')
+            time.sleep(self.cooldown_time)
+            self.batch_count = 0
 
 
+        self.session_end_time = datetime.now()
+
+        self.end_session()
 
 
-
-def main():
-    if not os.path.exists(WORD_FILE):
-        print(f"Error: Word file '{WORD_FILE}' not found!")
-        return
-
-    # Find starting index
-    load_progress()
-
-    # Load words
-    words = load_data(WORD_FILE)
-    
-    run_batch(words, JSON_FILE, batch_size=BATCH_SIZE)
-
-
-
-if __name__ == "__main__":
-
-    # Failsafe which doesn't even work right now; delete it or fix it
-    signal.signal(signal.SIGINT, signal_handler)
-    
-    main()
+if __name__ == '__main__':
+    colorama.init()
+    find_words = FindWords()
+    find_words.run()
