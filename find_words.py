@@ -37,6 +37,7 @@ class FindWords:
         self.session_number = 1
         self.batch_number = 1
         self.total_words_saved = 0
+        self.session_avg_search_time = 0
         self.average_search_time = 0
         self.batch_count = 0
         self.total_searches = 0
@@ -191,6 +192,7 @@ class FindWords:
                 response = requests.get(API_URL.format(word, API_KEY))
                 end_search = time.time()
                 search_time = round(end_search - start_search, 6)
+                self.session_avg_search_time += search_time
 
                 if response.status_code == 200:
                     data = response.json()
@@ -296,9 +298,9 @@ class FindWords:
         for i in range(self.num_batches):
             self.run_batch_cycle(self.input_data)
             print("\n" * 10)
-            print(f'Batch {self.batch_number + 1} begins in {str(self.cooldown_time)[0]} seconds...')
+            print(f'Batch {self.batch_number + 1}/{self.num_batches} begins in {str(self.cooldown_time)[0]} seconds...')
             print(f'Session progress: {round((self.batch_number/self.num_batches) * 100,1)}%')
-            print(f'Average search time this session: {round(self.session_avg_search_time,3)} seconds per search')
+            print(f'Average search time this session: {round((self.session_avg_search_time / self.session_search_count), 3)} seconds per search')
             self.batch_number += 1
             time.sleep(self.cooldown_time)
             self.batch_count = 0
