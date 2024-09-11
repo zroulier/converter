@@ -84,17 +84,17 @@ class FindWords:
         if not os.path.exists(OUTPUT_FILE): # New user installation
             welcome_msg = 'Welcome to this word finding script!'
             welcome_msg_len = int(len(welcome_msg))
-            new_line = '\n'
+            new_line = "\n"
             print(new_line * ((self.terminal_height // 2) + 1))
             
             for i in range(5): # Start Screen Animation
                 os.system('cls')
                 print(new_line * (i * 6))
                 print(Fore.YELLOW + '-' * self.terminal_width)
-                print((' ' * ((self.terminal_width // 2) - (int(len(welcome_msg)) // 2))) + welcome_msg + (' ' * ((self.terminal_width // 2) - (int(len(welcome_msg)) // 2))))
-                print('-' * self.terminal_width + Style.RESET_ALL)
-                print(Fore.RED + (' ' * ((self.terminal_width // 2) + 4 - int(len(welcome_msg)) // 2)) + 'No previous progress found\n')
-                print(Fore.GREEN + (' ' * ((self.terminal_width // 2) - 1 - int(len(welcome_msg)) // 2)) + 'Intializing script for first time use' + Style.RESET_ALL)
+                print(welcome_msg.center(self.columns))
+                print("-" * self.terminal_width + Style.RESET_ALL)
+                print(Fore.RED + (" " * ((self.terminal_width // 2) + 4 - int(len(welcome_msg)) // 2)) + 'No previous progress found\n')
+                print(Fore.GREEN + (" " * ((self.terminal_width // 2) - 1 - int(len(welcome_msg)) // 2)) + 'Intializing script for first time use' + Style.RESET_ALL)
                 time.sleep(1)
             time.sleep(3) # Start Screen Animation 5 second pause before disappearing
 
@@ -108,7 +108,7 @@ class FindWords:
                     with open(OUTPUT_FILE, 'w', newline='') as file:
                         writer = csv.writer(file)
                         writer.writerow(['Session Number', 'Batch Number', 'Search Index', 'Word', 'Part of Speech', 'Search Time', 'System Name', 'Aggregate Search Count'])
-                        aggregate_row = ['-','-','-','-','-','-','-',0]
+                        aggregate_row = ['-','-','-','-','-',0,'-',0]
                         writer.writerow(aggregate_row)
                         self.aggregate_row = aggregate_row
                         print(f'{Fore.GREEN}\nCreated {Fore.BLUE}{OUTPUT_FILE}{Style.RESET_ALL}')
@@ -149,7 +149,7 @@ class FindWords:
             self.load_save_point()
 
             welcome_msg = 'Welcome back to word finding script!'
-            new_line = '\n'
+            new_line = "\n"
             print(new_line * ((self.terminal_height // 2) + 1))
             
             for i in range(5): # Start Screen Animation
@@ -157,7 +157,7 @@ class FindWords:
                 print(new_line * (i * 6))
                 print(Fore.YELLOW + '-' * self.terminal_width)
                 print('Welcome back to word finding script!'.center(self.columns))
-                print(f'{' ' * ( (self.terminal_height))}') 
+                print(f'{" " * ( (self.terminal_height))}') 
                 print('-' * self.terminal_width + Style.RESET_ALL)
                 print(f'{Fore.CYAN}{round((self.total_searches / 466275) * 100, 2)}% total progress'.center(self.columns))
                 print(f'{Fore.CYAN}{self.total_words_saved} words have been saved{Style.RESET_ALL}'.center(self.columns))
@@ -169,17 +169,17 @@ class FindWords:
             time.sleep(1)
 
     def choose_session_settings(self, input_data):
-        print(f'{Fore.WHITE}{'\n' * self.terminal_height}{Fore.YELLOW}Begin by entering your session settings below: \n{Style.RESET_ALL}')
-        if input(f'Default value of searches per batch is {Fore.GREEN}100{Style.RESET_ALL}:{Style.RESET_ALL}\nContinue with default? (Y/N): ').upper() == 'Y':
+        print(Fore.WHITE + ("\n" * self.terminal_height) + Fore.YELLOW + 'Begin by entering your session settings below: \n' + Style.RESET_ALL)
+        if input('Default value of searches per batch is ' + Fore.GREEN + '100' + Style.RESET_ALL + ":\n" + 'Continue with default? (Y/N): ').upper() == 'Y':
             self.lot_size = 100
         else:
             self.lot_size = int(input('Enter Lot Size: '))
-        print(f'{"#\n" * 5}{Style.BRIGHT + Fore.RED}**{Fore.WHITE} {str(self.lot_size)} searches per lot {Fore.RED}**{Style.RESET_ALL}')
+        print(("#\n" * 5) + Style.BRIGHT + Fore.RED + '**' + Fore.WHITE + str(self.lot_size) + 'searches per lot' + Fore.RED + ' **' + Style.RESET_ALL)
         self.num_batches = int(input('Choose Session Batch Amount: '))
         self.cooldown_time = float(input('Choose Cooldown Time between Batches: '))
         self.session_name = input(f'Choose your system name for this session: {Style.RESET_ALL}').upper()
 
-        print(f'{'\n' * self.terminal_height}')
+        print("\n" * self.terminal_height)
         print(f'{Fore.CYAN}Loaded {len(input_data)} remaining searches{Style.RESET_ALL}')
         print(f'{Fore.GREEN}Beginning Batch {self.batch_number}... {Style.RESET_ALL}')
         time.sleep(3)
@@ -230,7 +230,7 @@ class FindWords:
                                 percent_total_complete = round((self.total_searches / 466275) * 100,0)
                                 percent_total_complete = int(percent_total_complete)
                                 
-                                print(f'{Fore.LIGHTRED_EX}[{percent_total_complete}%][{percent_session_complete}%][{percent_batch_complete}%] {Style.RESET_ALL}{Fore.GREEN}FOUND {Fore.CYAN}{word}{Style.RESET_ALL} | Type: {Fore.YELLOW}{part_of_speech}')
+                                print(f'{Fore.LIGHTRED_EX}[{percent_total_complete}%][{percent_session_complete}%][{percent_batch_complete}%]{" " * (7 - (len(str((percent_batch_complete))) + len(str(percent_session_complete)) + len(str(percent_total_complete))))}{Style.RESET_ALL}{Fore.LIGHTGREEN_EX}FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{" " * (20 - len(word))}| Type: {Fore.YELLOW}{part_of_speech}')
                                 
                                 new_row = self.session_number, self.batch_number, self.total_searches, word, part_of_speech, search_time, self.session_name, ''
                                 rows.insert(1, new_row)
@@ -254,6 +254,21 @@ class FindWords:
             time.sleep(0.1)
 
     def end_session(self):
+        
+        with open('session_stats.csv', 'r') as f:
+            reader = csv.reader(f)
+            rows = [row for row in reader if any(row)]
+        header_row = rows[0]
+
+
+        with open('session_stats.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(header_row)
+            for row in rows[1:]:
+                writer.writerow(row)
+
+
+        
         # Session Summary
         print('\n' * (self.terminal_height // 2))
         print(f'{Fore.LIGHTMAGENTA_EX}Session {self.session_number} Summary'.center(self.columns))
@@ -262,7 +277,7 @@ class FindWords:
         print(f'Session Word Count: {self.session_word_count}'.center(self.columns))
         print(f'Average Search Time: {round(self.average_search_time,4)} seconds'.center(self.columns))
         print(f'Total Progress Gained: {round((self.session_search_count / 466275 ) * 100,3)}%'.center(self.columns))
-        print(f'{'\n' * 2} You may now safely exit the program.\n\n')
+        print("\n\n" + Fore.LIGHTBLACK_EX + "You may now safely exit the program." + Style.RESET_ALL + "\n\n")
         time.sleep(10)
         sys.exit()
         
@@ -274,17 +289,20 @@ class FindWords:
         self.choose_session_settings(self.input_data) # 
         
         self.session_start_time = datetime.now()
+        self.session_avg_search_time = 0
         
         # Batch loop
-        while self.batch_number < self.num_batches + 1:
+        i = 0
+        for i in range(self.num_batches):
             self.run_batch_cycle(self.input_data)
+            print("\n" * 10)
+            print(f'Batch {self.batch_number + 1} begins in {str(self.cooldown_time)[0]} seconds...')
+            print(f'Session progress: {round((self.batch_number/self.num_batches) * 100,1)}%')
+            print(f'Average search time this session: {round(self.session_avg_search_time,3)} seconds per search')
             self.batch_number += 1
-            print('\n' * 10)
-            print(f'Batch {self.batch_number} begins in {str(self.cooldown_time)[0]} seconds...')
-            print(f'Session progress: {round((self.batch_number/(self.num_batches + 1)) * 100,5)}%')
             time.sleep(self.cooldown_time)
             self.batch_count = 0
-
+            i += 1
 
         self.session_end_time = datetime.now()
 
