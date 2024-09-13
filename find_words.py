@@ -9,6 +9,7 @@ from datetime import datetime
 import sys
 import csv
 import shutil
+import math
 
 INPUT_FILE = 'words.txt'
 OUTPUT_FILE = 'data.csv'
@@ -248,11 +249,9 @@ class FindWords:
                                 self.session_word_count += 1
                                 self.batch_word_count += 1
 
-                                percent_batch_complete = round(int((self.batch_count / self.lot_size) * 100),0)
-                                percent_session_complete = round(((self.batch_count + ((self.batch_number - 1) * self.lot_size)) / (self.num_batches * self.lot_size)) * 100,0)
-                                percent_session_complete = int(percent_session_complete)
-                                percent_total_complete = round((self.total_searches / 466275) * 100,0)
-                                percent_total_complete = int(percent_total_complete)
+                                percent_batch_complete = math.floor(int((self.batch_count / self.lot_size) * 100))
+                                percent_session_complete = math.floor(((self.batch_count + ((self.batch_number - 1) * self.lot_size)) / (self.num_batches * self.lot_size)) * 100)
+                                percent_total_complete = math.floor((self.total_searches / 466275) * 100)
                                 
                                 print(f'{Fore.LIGHTRED_EX}[{percent_total_complete}%][{percent_session_complete}%][{percent_batch_complete}%]{" " * (7 - (len(str((percent_batch_complete))) + len(str(percent_session_complete)) + len(str(percent_total_complete))))}{Style.RESET_ALL}{Fore.LIGHTGREEN_EX}FOUND {Fore.CYAN}{word}{Style.RESET_ALL}{" " * (20 - len(word))}| Type: {Fore.YELLOW}{part_of_speech}')
                                 
