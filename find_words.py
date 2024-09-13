@@ -41,6 +41,7 @@ class FindWords:
         self.average_search_time = 0
         self.batch_count = 0
         self.total_searches = 0
+        self.batch_word_count = 0
         self.terminal_size = os.get_terminal_size()
         self.terminal_width =  self.terminal_size.columns
         self.terminal_height = self.terminal_size.lines
@@ -80,6 +81,21 @@ class FindWords:
                 # import pdb; pdb.set_trace()
             else:
                 self.total_searches = 0
+
+    def save_batch_stats(self):
+
+        with open('batch_stats.csv', 'r') as f:
+            reader = csv.reader(f)
+            rows = [row for row in reader if any(row)]
+            header_row = rows[0]
+
+        new_row = [self.session_number, self.batch_number, self.batch_end_time - self.batch_start_time, self.batch_search_count, self.batch_word_count, (self.batch_word_count / self.batch_count)]
+        rows.insert(1, new_row)
+
+        with open('batch_stats.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(header_row)
+            writer.writerows(rows[1:])
 
     def initialize(self):
         if not os.path.exists(OUTPUT_FILE): # New user installation
@@ -177,7 +193,11 @@ class FindWords:
             self.lot_size = int(input('Enter Lot Size: '))
         print(("#\n" * 5) + Style.BRIGHT + Fore.RED + '**' + Fore.WHITE + str(self.lot_size) + 'searches per lot' + Fore.RED + ' **' + Style.RESET_ALL)
         self.num_batches = int(input('Choose Session Batch Amount: '))
-        self.cooldown_time = float(input('Choose Cooldown Time between Batches: '))
+        if self.num_batches > 99:
+            print(f'{Fore.LIGHTRED_EX}NOTE: 5 second or more cooldown time recommended for sessions of 100 batches or greater{Style.RESET_ALL}')
+            self.cooldown_time = float(input('Choose Cooldown Time between Batches: '))
+        else:
+            self.cooldown_time = float(input('Choose Cooldown Time between Batches: '))
         self.session_name = input(f'Choose your system name for this session: {Style.RESET_ALL}').upper()
 
         print("\n" * self.terminal_height)
@@ -197,6 +217,7 @@ class FindWords:
                 if response.status_code == 200:
                     data = response.json()
                     self.batch_count += 1
+                    self.batch_search_count += 1
                     self.total_searches += 1
                     self.session_search_count += 1
                                         
@@ -225,6 +246,7 @@ class FindWords:
                             if part_of_speech in ACCEPTED_POS:
                                 
                                 self.session_word_count += 1
+                                self.batch_word_count += 1
 
                                 percent_batch_complete = round(int((self.batch_count / self.lot_size) * 100),0)
                                 percent_session_complete = round(((self.batch_count + ((self.batch_number - 1) * self.lot_size)) / (self.num_batches * self.lot_size)) * 100,0)
@@ -250,10 +272,14 @@ class FindWords:
         return None
 
     def run_batch_cycle(self, input_data): # Completes a loop of api calls for one batch
+        self.batch_search_count = 0
+        self.batch_start_time = time.time()
         while self.batch_count < self.lot_size:
             word = input_data[self.batch_count + (100 * (self.batch_number - 1))]
             self.api_call(word)
-            time.sleep(0.1)
+            time.sleep(0.01) # SPEED BETWEEN SEARCHES (I've found this settles at around 0.09 as the fastest)
+        self.batch_end_time = time.time()
+        self.save_batch_stats()
 
     def end_session(self):
         
@@ -262,20 +288,22 @@ class FindWords:
             rows = [row for row in reader if any(row)]
         header_row = rows[0]
 
+        new_row = [self.session_number, self.session_end_time - self.session_start_time, self.session_name, self.session_search_count, self.session_word_count, (self.session_avg_search_time / self.session_search_count), (self.session_word_count / (self.num_batches * self.lot_size))]
+        rows.insert(1, new_row)
+
 
         with open('session_stats.csv', 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerows(header_row)
-            for row in rows[1:]:
-                writer.writerow(row)
-
-
+            writer.writerow(header_row)
+            writer.writerows(rows[1:])
         
         # Session Summary
         print('\n' * (self.terminal_height // 2))
         print(f'{Fore.LIGHTMAGENTA_EX}Session {self.session_number} Summary'.center(self.columns))
         print(f'Session Start Time: {self.session_start_time}'.center(self.columns))
         print(f'Session End Time: {self.session_end_time}'.center(self.columns))
+        print(f'Session Batches: {self.num_batches}'.center(self.columns))
+        print(f'Average Words per Batch: {self.session_word_count / self.num_batches}'.center(self.columns))
         print(f'Session Word Count: {self.session_word_count}'.center(self.columns))
         print(f'Average Search Time: {round(self.average_search_time,4)} seconds'.center(self.columns))
         print(f'Total Progress Gained: {round((self.session_search_count / 466275 ) * 100,3)}%'.center(self.columns))
@@ -289,8 +317,8 @@ class FindWords:
         self.input_data = self.load_input_data() # Loads remaining searches
 
         self.choose_session_settings(self.input_data) # 
-        
-        self.session_start_time = datetime.now()
+
+        self.session_start_time = time.time()
         self.session_avg_search_time = 0
         
         # Batch loop
@@ -298,15 +326,18 @@ class FindWords:
         for i in range(self.num_batches):
             self.run_batch_cycle(self.input_data)
             print("\n" * 10)
-            print(f'Batch {self.batch_number + 1}/{self.num_batches} begins in {str(self.cooldown_time)[0]} seconds...')
+            print(f'Batch {self.batch_number} purity rate: {round((self.batch_word_count / self.lot_size) * 100,2)}%')
+            print(f'Session purity rate: {round((self.session_word_count / (self.batch_number * self.lot_size) * 100),2)}%')
             print(f'Session progress: {round((self.batch_number/self.num_batches) * 100,1)}%')
             print(f'Average search time this session: {round((self.session_avg_search_time / self.session_search_count), 3)} seconds per search')
+            print(f'Batch {self.batch_number + 1}/{self.num_batches} begins in {str(self.cooldown_time)[0]} seconds...')
             self.batch_number += 1
             time.sleep(self.cooldown_time)
+            self.batch_word_count = 0
             self.batch_count = 0
             i += 1
 
-        self.session_end_time = datetime.now()
+        self.session_end_time = time.time()
 
         self.end_session()
 
